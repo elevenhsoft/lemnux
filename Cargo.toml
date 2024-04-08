@@ -1,0 +1,17 @@
+[package]
+name = "lemnux"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.81"
+confy = "0.6.1"
+iced = { version = "0.12.1", features = ["tokio"] }
+lazy_static = "1.4.0"
+lemmy_api_common = "0.19.3"
+reqwest = { version = "0.12.3", features = ["json", "native-tls-vendored"] }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_derive = "1.0.197"
+tokio = { version = "1.37.0", features = ["full"] }
