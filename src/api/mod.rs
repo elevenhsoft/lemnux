@@ -1,10 +1,15 @@
+#![allow(clippy::unnecessary_to_owned, clippy::to_string_in_format_args)]
+
 use anyhow::Result;
 use lemmy_api_common::{
+    lemmy_db_schema::{newtypes::CommunityId, ListingType, SortType},
+    lemmy_db_views::structs::PaginationCursor,
     person::{Login, LoginResponse},
+    post::GetPostsResponse,
     sensitive::Sensitive,
 };
 use reqwest::{
-    header::{HeaderMap, HeaderValue, ACCEPT, USER_AGENT},
+    header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, USER_AGENT},
     Client, ClientBuilder,
 };
 use serde::{Deserialize, Serialize};
@@ -85,13 +90,35 @@ impl Instances {
 }
 
 lazy_static! {
-    static ref INS_SETTINGS: Settings = confy::load("lemnux", "instance").unwrap();
-    static ref REQUEST: API = API::new(true, INS_SETTINGS.instance.clone().unwrap().domain);
+    static ref INST_SETTINGS: Settings = confy::load("lemnux", "instance").unwrap();
+    static ref USER_SETTINGS: Settings = confy::load("lemnux", "user").unwrap();
+    static ref REQUEST: API = API::new(
+        true,
+        INST_SETTINGS.instance.clone().unwrap().domain,
+        USER_SETTINGS.jwt.clone().unwrap().token
+    );
 }
 
 impl API {
-    pub fn new(secure: bool, domain: String) -> Self {
-        let client = Client::new();
+    pub fn new(secure: bool, domain: String, jwt: Option<Sensitive<String>>) -> Self {
+        let mut headers = HeaderMap::new();
+        headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+        headers.insert(USER_AGENT, HeaderValue::from_static(LEMNUX_UA));
+
+        let client = if jwt.is_some() {
+            let bearer_token = format!("Bearer {}", jwt.unwrap().to_string());
+            headers.insert(AUTHORIZATION, HeaderValue::from_str(&bearer_token).unwrap());
+            ClientBuilder::new()
+                .default_headers(headers)
+                .build()
+                .unwrap()
+        } else {
+            ClientBuilder::new()
+                .default_headers(headers)
+                .build()
+                .unwrap()
+        };
+
         let url = format!(
             "http{}://{}{}{}",
             if secure { "s" } else { "" },
@@ -139,4 +166,60 @@ pub async fn login(
     };
 
     Some(jwt)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PostsList {
+    pub type_: Option<ListingType>,
+    pub sort: Option<SortType>,
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+    pub community_id: Option<CommunityId>,
+    pub community_name: Option<String>,
+    pub saved_only: Option<bool>,
+    pub liked_only: Option<bool>,
+    pub disliked_only: Option<bool>,
+    pub page_cursor: Option<PaginationCursor>,
+}
+
+impl PostsList {
+    pub fn new(page_cursor: Option<PaginationCursor>) -> Self {
+        Self {
+            type_: Some(ListingType::Local),
+            sort: Some(SortType::Hot),
+            page: None,
+            limit: Some(20),
+            community_id: None,
+            community_name: None,
+            saved_only: Some(false),
+            liked_only: Some(false),
+            disliked_only: Some(false),
+            page_cursor,
+        }
+    }
+}
+
+impl Default for PostsList {
+    fn default() -> Self {
+        Self::new(None)
+    }
+}
+
+pub async fn get_posts(page_cursor: Option<PaginationCursor>) -> Option<GetPostsResponse> {
+    let post_config = PostsList::new(page_cursor);
+
+    let url = format!("{}/post/list", REQUEST.url.clone());
+
+    let response = REQUEST
+        .client
+        .get(url)
+        .query(&post_config)
+        .send()
+        .await
+        .unwrap()
+        .json::<GetPostsResponse>()
+        .await
+        .unwrap();
+
+    Some(response)
 }
