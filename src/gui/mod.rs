@@ -1,4 +1,4 @@
-use iced::widget::{button, column, row, text_input, Container, Space};
+use iced::widget::{button, column, row, scrollable, text, text_input, Container, Space};
 use iced::{executor, Length};
 use iced::{Application, Command, Element, Theme};
 
@@ -6,8 +6,9 @@ use crate::api::{login, Instance, Instances};
 use crate::settings::{Settings, JWT};
 
 pub struct Lemnux {
-    instance_domain: String,
+    user_domain: String,
     instance: Option<Instance>,
+    instances: Option<Vec<Instance>>,
     username_field: String,
     password_field: String,
 }
@@ -15,7 +16,7 @@ pub struct Lemnux {
 #[derive(Debug, Clone)]
 pub enum Message {
     NotFound,
-    FetchInstance,
+    SetInstance(Instance),
     Instances(Instances),
     DomainName(String),
     Username(String),
@@ -33,8 +34,9 @@ impl Application for Lemnux {
     fn new(_flags: ()) -> (Lemnux, Command<Self::Message>) {
         (
             Lemnux {
-                instance_domain: String::new(),
+                user_domain: String::new(),
                 instance: None,
+                instances: None,
                 username_field: String::new(),
                 password_field: String::new(),
             },
@@ -49,23 +51,25 @@ impl Application for Lemnux {
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
             Message::NotFound => Command::none(),
-            Message::FetchInstance => {
-                if !self.instance_domain.is_empty() {
-                    return Command::perform(Instances::new(), |result| match result {
-                        Ok(res) => Message::Instances(res),
-                        Err(_) => Message::NotFound,
-                    });
+            Message::Instances(inst) => {
+                self.instances = Some(inst.federated_instances.linked);
+
+                if self.instance.is_some() {
+                    let instance = self.instance.as_ref().unwrap();
+
+                    let settings = Settings {
+                        user: None,
+                        jwt: None,
+                        instance: Some(instance.clone()),
+                    };
+
+                    confy::store("lemnux", "instance", settings).unwrap();
                 }
+
                 Command::none()
             }
-            Message::Instances(inst) => {
-                if !self.instance_domain.is_empty() {
-                    self.instance = inst
-                        .federated_instances
-                        .linked
-                        .into_iter()
-                        .find(|fed| fed.domain == self.instance_domain)
-                }
+            Message::SetInstance(inst) => {
+                self.instance = Some(inst);
 
                 if self.instance.is_some() {
                     let instance = self.instance.as_ref().unwrap();
@@ -82,7 +86,30 @@ impl Application for Lemnux {
                 Command::none()
             }
             Message::DomainName(domain_name) => {
-                self.instance_domain = domain_name;
+                self.user_domain = domain_name;
+
+                if self.user_domain.len() == 3 {
+                    return Command::perform(Instances::new(), |result| match result {
+                        Ok(res) => Message::Instances(res),
+                        Err(_) => Message::NotFound,
+                    });
+                }
+
+                if self.user_domain.len() >= 3 && self.instances.is_some() {
+                    let mut domains: Vec<Instance> = Vec::new();
+
+                    self.instances
+                        .clone()
+                        .unwrap()
+                        .into_iter()
+                        .for_each(|item| {
+                            if item.domain.contains(&self.user_domain) {
+                                domains.push(item)
+                            }
+                        });
+                    self.instances = Some(domains);
+                };
+
                 Command::none()
             }
             Message::Username(user) => {
@@ -122,12 +149,25 @@ impl Application for Lemnux {
     }
 
     fn view(&self) -> Element<Self::Message> {
-        let search = text_input("Search for instance domain", &self.instance_domain)
+        let search = text_input("Search for instance domain", &self.user_domain)
             .on_input(Message::DomainName);
 
-        let fetcher = button("Fetch instances").on_press(Message::FetchInstance);
+        let mut list = column!().padding(10.);
 
-        let row = row!(search, fetcher).spacing(30);
+        if self.instances.is_some() {
+            for instance in self.instances.clone().unwrap() {
+                let item = button(text(instance.domain.to_string()))
+                    .on_press(Message::SetInstance(instance))
+                    .width(Length::Fill);
+                list = list.push(item);
+            }
+        }
+
+        let scrollable_list = scrollable(list)
+            .width(Length::Fill)
+            .height(Length::Fixed(100.));
+
+        let row = row!(search).spacing(30);
 
         let spacer = Space::new(Length::Fixed(30.), Length::Fixed(30.));
 
@@ -144,7 +184,7 @@ impl Application for Lemnux {
 
         let col = column!(username_field, password_field, login_btn).spacing(8);
 
-        let content = column!(row, spacer, col);
+        let content = column!(row, scrollable_list, spacer, col);
 
         Container::new(content).padding(30).into()
     }
