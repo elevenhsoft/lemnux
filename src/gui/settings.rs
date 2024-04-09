@@ -7,6 +7,7 @@ use iced::{
 
 use crate::{
     api::{login, Instance, Instances},
+    app::user::User,
     settings::JWT,
 };
 
@@ -18,6 +19,7 @@ pub struct Settings {
     search_results: Option<Vec<Instance>>,
     username_field: String,
     password_field: String,
+    user: Option<User>,
 }
 
 #[derive(Debug, Clone)]
@@ -34,6 +36,12 @@ pub enum Message {
 
 impl Settings {
     pub fn new() -> Self {
+        let user = if let Ok(config) = confy::load::<crate::settings::Settings>("lemnux", "user") {
+            config.user
+        } else {
+            None
+        };
+
         Self {
             user_domain: String::new(),
             instance: None,
@@ -41,6 +49,7 @@ impl Settings {
             search_results: None,
             username_field: String::new(),
             password_field: String::new(),
+            user,
         }
     }
 
@@ -133,12 +142,12 @@ impl Settings {
             }
             Message::Logged(jwt) => {
                 let settings = crate::settings::Settings {
-                    user: None,
+                    user: Some(User::new(self.username_field.clone().into(), true)),
                     jwt,
                     instance: None,
                 };
 
-                confy::store("lemnux", "jwt", settings).unwrap();
+                confy::store("lemnux", "user", settings).unwrap();
 
                 Command::none()
             }
@@ -166,20 +175,24 @@ impl Settings {
 
         let spacer = Space::new(Length::Fixed(30.), Length::Fixed(30.));
 
-        let username_field =
-            text_input("Username", &self.username_field).on_input(Message::Username);
+        let mut content = column!(search, scrollable_list, spacer);
 
-        let password_field = text_input("Password", &self.password_field)
-            .secure(true)
-            .on_input(Message::Password);
+        if self.instance.is_some() && self.user.is_none() {
+            let username_field =
+                text_input("Username", &self.username_field).on_input(Message::Username);
 
-        let login_btn = button("Log in")
-            .on_press(Message::Login)
-            .width(Length::Fill);
+            let password_field = text_input("Password", &self.password_field)
+                .secure(true)
+                .on_input(Message::Password);
 
-        let col = column!(username_field, password_field, login_btn).spacing(8);
+            let login_btn = button("Log in")
+                .on_press(Message::Login)
+                .width(Length::Fill);
 
-        let content = column!(search, scrollable_list, spacer, col);
+            let col = column!(username_field, password_field, login_btn).spacing(8);
+
+            content = content.push(col);
+        }
 
         Container::new(content).into()
     }

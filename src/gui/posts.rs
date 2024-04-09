@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, Container},
+    widget::{row, Container},
     Command, Element,
 };
 
@@ -7,26 +7,19 @@ use iced::{
 pub struct Posts {}
 
 #[derive(Debug, Clone)]
-pub enum Message {
-    OpenSettings,
-}
+pub enum Message {}
 
 impl Posts {
     pub fn new() -> Self {
         Self {}
     }
 
-    pub fn update(&mut self, message: Message) -> Command<Message> {
-        match message {
-            Message::OpenSettings => println!("dupa"),
-        }
+    pub fn update(&mut self, _message: Message) -> Command<Message> {
         Command::none()
     }
 
     pub fn view(&self) -> Element<Message> {
-        let btn = button("settings").on_press(Message::OpenSettings);
-
-        Container::new(btn).into()
+        Container::new(row!()).into()
     }
 }
 

@@ -4,7 +4,7 @@ use serde_derive::{Deserialize, Serialize};
 
 pub const LEMNUX_UA: &str = "Lemnux v0.1.0";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct JWT {
     pub token: Option<Sensitive<String>>,
     pub registration_created: bool,

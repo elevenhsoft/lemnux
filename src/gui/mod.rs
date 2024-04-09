@@ -3,7 +3,11 @@
 pub mod posts;
 pub mod settings;
 
-use iced::{executor, widget::Container, Application, Command, Element, Theme};
+use iced::{
+    executor,
+    widget::{button, column, row, Container},
+    Application, Command, Element, Theme,
+};
 
 use self::settings::Settings;
 
@@ -21,6 +25,8 @@ pub struct Lemnux {
 pub enum Message {
     Home(posts::Message),
     Settings(settings::Message),
+    GotoHome,
+    OpenSettings,
 }
 
 impl Application for Lemnux {
@@ -45,12 +51,11 @@ impl Application for Lemnux {
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
             Message::Home(post_mess) => {
-                match post_mess {
-                    posts::Message::OpenSettings => {
-                        self.page = Pages::Settings(Box::new(Settings::new()))
-                    }
+                let Pages::Home(home_page) = &mut self.page else {
+                    return Command::none();
                 };
-                Command::none()
+
+                home_page.update(post_mess).map(Message::Home)
             }
             Message::Settings(opt) => {
                 let Pages::Settings(settings_page) = &mut self.page else {
@@ -59,14 +64,30 @@ impl Application for Lemnux {
 
                 settings_page.update(opt).map(Message::Settings)
             }
+            Message::GotoHome => {
+                self.page = Pages::Home(Box::new(posts::Posts::new()));
+
+                Command::none()
+            }
+            Message::OpenSettings => {
+                self.page = Pages::Settings(Box::new(Settings::new()));
+
+                Command::none()
+            }
         }
     }
 
     fn view(&self) -> Element<Self::Message> {
-        let content = match &self.page {
+        let home_btn = button("Home").on_press(Message::GotoHome);
+        let sett_btn = button("Settings").on_press(Message::OpenSettings);
+        let topbar = row!(home_btn, sett_btn);
+
+        let page = match &self.page {
             Pages::Home(posts) => posts.view().map(Message::Home),
             Pages::Settings(settings) => settings.view().map(Message::Settings),
         };
+
+        let content = column!(topbar, page);
 
         Container::new(content).into()
     }
