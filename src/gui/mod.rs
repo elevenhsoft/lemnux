@@ -9,6 +9,7 @@ pub struct Lemnux {
     user_domain: String,
     instance: Option<Instance>,
     instances: Option<Vec<Instance>>,
+    search_results: Option<Vec<Instance>>,
     username_field: String,
     password_field: String,
 }
@@ -37,6 +38,7 @@ impl Application for Lemnux {
                 user_domain: String::new(),
                 instance: None,
                 instances: None,
+                search_results: None,
                 username_field: String::new(),
                 password_field: String::new(),
             },
@@ -88,7 +90,7 @@ impl Application for Lemnux {
             Message::DomainName(domain_name) => {
                 self.user_domain = domain_name;
 
-                if self.user_domain.len() == 3 {
+                if self.user_domain.len() == 3 && self.instances.is_none() {
                     return Command::perform(Instances::new(), |result| match result {
                         Ok(res) => Message::Instances(res),
                         Err(_) => Message::NotFound,
@@ -107,7 +109,8 @@ impl Application for Lemnux {
                                 domains.push(item)
                             }
                         });
-                    self.instances = Some(domains);
+
+                    self.search_results = Some(domains);
                 };
 
                 Command::none()
@@ -154,8 +157,8 @@ impl Application for Lemnux {
 
         let mut list = column!().padding(10.);
 
-        if self.instances.is_some() {
-            for instance in self.instances.clone().unwrap() {
+        if self.search_results.is_some() {
+            for instance in self.search_results.clone().unwrap() {
                 let item = button(text(instance.domain.to_string()))
                     .on_press(Message::SetInstance(instance))
                     .width(Length::Fill);
