@@ -1,4 +1,10 @@
-#![allow(clippy::large_enum_variant)]
+#![allow(
+    clippy::large_enum_variant,
+    clippy::unnecessary_to_owned,
+    clippy::to_string_in_format_args
+)]
+
+use std::fs;
 
 use iced::{
     widget::{button, column, scrollable, text, text_input, Container, Space},
@@ -32,6 +38,7 @@ pub enum Message {
     Password(String),
     Login,
     Logged(Option<JWT>),
+    Logout,
 }
 
 impl Settings {
@@ -151,6 +158,20 @@ impl Settings {
 
                 Command::none()
             }
+            Message::Logout => {
+                let config_path = confy::get_configuration_file_path("lemnux", "user");
+
+                if let Ok(file) = config_path {
+                    if file.exists() {
+                        fs::remove_file(file).unwrap();
+                    }
+                }
+
+                self.instance = None;
+                self.user = None;
+
+                Command::none()
+            }
         }
     }
 
@@ -177,7 +198,7 @@ impl Settings {
 
         let mut content = column!(search, scrollable_list, spacer);
 
-        if self.instance.is_some() && self.user.is_none() {
+        if self.instance.is_some() {
             let username_field =
                 text_input("Username", &self.username_field).on_input(Message::Username);
 
@@ -189,7 +210,16 @@ impl Settings {
                 .on_press(Message::Login)
                 .width(Length::Fill);
 
-            let col = column!(username_field, password_field, login_btn).spacing(8);
+            let col = if self.user.is_some() && self.user.as_ref().unwrap().is_logged {
+                let welcome_message = text(format!(
+                    "Welcome, {}",
+                    self.user.as_ref().unwrap().username.to_string()
+                ));
+                let logout_btn = button("Logout").on_press(Message::Logout);
+                column!(welcome_message, logout_btn)
+            } else {
+                column!(username_field, password_field, login_btn).spacing(8)
+            };
 
             content = content.push(col);
         }
