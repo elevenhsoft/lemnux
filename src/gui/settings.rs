@@ -198,7 +198,7 @@ impl Settings {
 
         let mut content = column!(search, scrollable_list, spacer);
 
-        if self.instance.is_some() {
+        if self.instance.is_some() || self.user.is_some() {
             let username_field =
                 text_input("Username", &self.username_field).on_input(Message::Username);
 
