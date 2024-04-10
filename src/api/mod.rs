@@ -2,7 +2,6 @@
 
 use std::fmt::Display;
 
-use anyhow::Result;
 use lemmy_api_common::{
     lemmy_db_schema::{newtypes::CommunityId, ListingType, SortType},
     lemmy_db_views::structs::PaginationCursor,
@@ -68,7 +67,7 @@ pub struct FederationState {
 }
 
 impl Instances {
-    pub fn new() -> Result<Instances> {
+    pub async fn new() -> Instances {
         let domain = "lemmy.ml";
         let url = format!(
             "https://{}{}{}/federated_instances",
@@ -77,11 +76,12 @@ impl Instances {
         let mut headers = HeaderMap::new();
         headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
         headers.insert(USER_AGENT, HeaderValue::from_static(LEMNUX_UA));
-        let client = reqwest::blocking::ClientBuilder::new()
+        let client = ClientBuilder::new()
             .default_headers(headers)
-            .build()?;
+            .build()
+            .unwrap();
 
-        Ok(client.get(url).send().unwrap().json().unwrap())
+        client.get(url).send().await.unwrap().json().await.unwrap()
     }
 }
 

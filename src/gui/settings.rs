@@ -12,7 +12,7 @@ use iced::{
 };
 
 use crate::{
-    api::{login, Instance, Instances},
+    api::{login, Instance},
     settings::{AppTheme, Preferences, User, JWT},
 };
 
@@ -20,7 +20,7 @@ use crate::{
 pub struct Settings {
     instance: Option<Instance>,
     instances_to_search: State<Instance>,
-    user_selected_instance: Instance,
+    user_selected_instance: Option<Instance>,
     app_theme_chooser: State<AppTheme>,
     user_theme: AppTheme,
     username_field: String,
@@ -42,16 +42,12 @@ pub enum Message {
 }
 
 impl Settings {
-    pub fn new() -> Self {
+    pub fn new(instances: Vec<Instance>) -> Self {
         let user = if let Ok(config) = confy::load::<crate::settings::Settings>("lemnux", "user") {
             config.user
         } else {
             None
         };
-
-        let fetched_instances = Instances::new().unwrap();
-        let instances_to_search = State::new(fetched_instances.federated_instances.linked.clone());
-        let first_instance = fetched_instances.federated_instances.linked[0].clone();
 
         let themes = AppTheme::to_vec();
         let app_theme_chooser = State::new(themes.clone());
@@ -65,8 +61,8 @@ impl Settings {
 
         Self {
             instance: None,
-            instances_to_search,
-            user_selected_instance: first_instance,
+            instances_to_search: State::new(instances),
+            user_selected_instance: None,
             app_theme_chooser,
             user_theme,
             username_field: String::new(),
@@ -95,7 +91,7 @@ impl Settings {
                 Command::none()
             }
             Message::UserSelectedInstance(inst) => {
-                self.user_selected_instance = inst;
+                self.user_selected_instance = Some(inst);
 
                 Command::none()
             }
@@ -169,7 +165,7 @@ impl Settings {
             combo_box(
                 &self.instances_to_search,
                 "Select your instance you want to work with",
-                Some(&self.user_selected_instance),
+                self.user_selected_instance.as_ref(),
                 Message::SetInstance,
             )
             .on_option_hovered(Message::UserSelectedInstance),
@@ -202,11 +198,5 @@ impl Settings {
         }
 
         Container::new(content).into()
-    }
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self::new()
     }
 }

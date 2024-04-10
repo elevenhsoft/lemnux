@@ -149,7 +149,7 @@ impl Default for Preferences {
 pub struct Settings {
     pub user: Option<User>,
     pub instance: Option<Instance>,
-    pub preferences: Preferences,
+    pub preferences: Option<Preferences>,
 }
 
 impl Settings {

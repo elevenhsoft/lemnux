@@ -10,9 +10,8 @@ use iced::{
 };
 use lemmy_api_common::post::GetPostsResponse;
 
-use crate::api::get_posts;
-
 use self::settings::Settings;
+use crate::api::{get_posts, Instances};
 
 #[derive(Debug, Clone)]
 pub enum Pages {
@@ -34,6 +33,7 @@ pub enum Message {
     Settings(settings::Message),
     GotoHome,
     OpenSettings,
+    FetchedInstances(Instances),
 }
 
 impl Application for Lemnux {
@@ -89,8 +89,10 @@ impl Application for Lemnux {
 
                 settings_page.update(opt).map(Message::Settings)
             }
-            Message::OpenSettings => {
-                self.page = Pages::Settings(Box::new(Settings::new()));
+            Message::OpenSettings => Command::perform(Instances::new(), Message::FetchedInstances),
+            Message::FetchedInstances(inst) => {
+                self.page =
+                    Pages::Settings(Box::new(Settings::new(inst.federated_instances.linked)));
 
                 Command::none()
             }
