@@ -185,7 +185,7 @@ pub struct PostsList {
 impl PostsList {
     pub fn new(page_cursor: Option<PaginationCursor>) -> Self {
         Self {
-            type_: Some(ListingType::Local),
+            type_: Some(ListingType::Subscribed),
             sort: Some(SortType::Hot),
             page: None,
             limit: Some(20),
