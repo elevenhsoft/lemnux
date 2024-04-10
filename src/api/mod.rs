@@ -21,7 +21,7 @@ const API_VER: &str = "/v3";
 
 #[derive(Debug)]
 pub struct API {
-    pub domain: String,
+    pub instance: Option<Instance>,
     pub url: String,
     client: Client,
 }
@@ -89,24 +89,20 @@ impl Instances {
     }
 }
 
-lazy_static! {
-    static ref INST_SETTINGS: Settings = confy::load("lemnux", "instance").unwrap();
-    static ref USER_SETTINGS: Settings = confy::load("lemnux", "user").unwrap();
-    static ref REQUEST: API = API::new(
-        true,
-        INST_SETTINGS.instance.clone().unwrap().domain,
-        USER_SETTINGS.jwt.clone().unwrap().token
-    );
-}
-
 impl API {
-    pub fn new(secure: bool, domain: String, jwt: Option<Sensitive<String>>) -> Self {
+    pub fn new(secure: bool) -> Self {
+        let instance_setting: Settings = confy::load("lemnux", "instance").unwrap();
+        let user_setting: Settings = confy::load("lemnux", "user").unwrap();
+
         let mut headers = HeaderMap::new();
         headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
         headers.insert(USER_AGENT, HeaderValue::from_static(LEMNUX_UA));
 
-        let client = if jwt.is_some() {
-            let bearer_token = format!("Bearer {}", jwt.unwrap().to_string());
+        let client = if user_setting.jwt.is_some() {
+            let bearer_token = format!(
+                "Bearer {}",
+                user_setting.jwt.unwrap().token.unwrap().to_string()
+            );
             headers.insert(AUTHORIZATION, HeaderValue::from_str(&bearer_token).unwrap());
             ClientBuilder::new()
                 .default_headers(headers)
@@ -119,16 +115,25 @@ impl API {
                 .unwrap()
         };
 
-        let url = format!(
-            "http{}://{}{}{}",
-            if secure { "s" } else { "" },
-            domain,
-            API_URL,
-            API_VER
-        );
+        let url = if instance_setting.instance.is_some() {
+            format!(
+                "http{}://{}{}{}",
+                if secure { "s" } else { "" },
+                instance_setting.instance.as_ref().unwrap().domain,
+                API_URL,
+                API_VER
+            )
+        } else {
+            format!(
+                "http{}://lemmy.ml{}{}",
+                if secure { "s" } else { "" },
+                API_URL,
+                API_VER
+            )
+        };
 
         Self {
-            domain,
+            instance: instance_setting.instance,
             url,
             client,
         }
@@ -146,9 +151,10 @@ pub async fn login(
         totp_2fa_token,
     };
 
-    let url = format!("{}/user/login", REQUEST.url.clone());
+    let api = API::new(true);
+    let url = format!("{}/user/login", api.url.clone());
 
-    let response = REQUEST
+    let response = api
         .client
         .post(url)
         .json(&params)
@@ -185,7 +191,7 @@ pub struct PostsList {
 impl PostsList {
     pub fn new(page_cursor: Option<PaginationCursor>) -> Self {
         Self {
-            type_: Some(ListingType::Subscribed),
+            type_: Some(ListingType::Local),
             sort: Some(SortType::Hot),
             page: None,
             limit: Some(20),
@@ -199,18 +205,13 @@ impl PostsList {
     }
 }
 
-impl Default for PostsList {
-    fn default() -> Self {
-        Self::new(None)
-    }
-}
-
 pub async fn get_posts(page_cursor: Option<PaginationCursor>) -> Option<GetPostsResponse> {
     let post_config = PostsList::new(page_cursor);
+    let api = API::new(true);
 
-    let url = format!("{}/post/list", REQUEST.url.clone());
+    let url = format!("{}/post/list", api.url.clone());
 
-    let response = REQUEST
+    let response = api
         .client
         .get(url)
         .query(&post_config)

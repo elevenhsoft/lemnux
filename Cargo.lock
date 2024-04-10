@@ -1746,7 +1746,6 @@ dependencies = [
  "anyhow",
  "confy",
  "iced",
- "lazy_static",
  "lemmy_api_common",
  "reqwest",
  "serde",
