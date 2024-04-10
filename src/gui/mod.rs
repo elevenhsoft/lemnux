@@ -23,6 +23,7 @@ pub enum Pages {
 
 pub struct Lemnux {
     pub page: Pages,
+    theme: Theme,
     posts: Option<GetPostsResponse>,
 }
 
@@ -43,14 +44,20 @@ impl Application for Lemnux {
 
     fn new(_flags: ()) -> (Lemnux, Command<Self::Message>) {
         let load_posts = Command::perform(get_posts(None), Message::InitalizePosts);
+        let theme = crate::settings::Settings::load_theme();
 
         (
             Lemnux {
                 page: Pages::Init,
+                theme,
                 posts: None,
             },
             load_posts,
         )
+    }
+
+    fn theme(&self) -> Self::Theme {
+        self.theme.clone()
     }
 
     fn title(&self) -> String {
@@ -91,9 +98,15 @@ impl Application for Lemnux {
     }
 
     fn view(&self) -> Element<Self::Message> {
-        let home_btn = button("Home").on_press(Message::GotoHome);
-        let sett_btn = button("Settings").on_press(Message::OpenSettings);
-        let topbar = row!(home_btn, sett_btn);
+        let home_btn = button("Lemnux")
+            .on_press(Message::GotoHome)
+            .width(92)
+            .height(92);
+        let sett_btn = button("Settings")
+            .on_press(Message::OpenSettings)
+            .width(92)
+            .height(92);
+        let topbar = row!(home_btn, sett_btn).spacing(8).height(100);
 
         let page = match &self.page {
             Pages::Init => row!().into(),

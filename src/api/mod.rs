@@ -1,5 +1,7 @@
 #![allow(clippy::unnecessary_to_owned, clippy::to_string_in_format_args)]
 
+use std::fmt::Display;
+
 use anyhow::Result;
 use lemmy_api_common::{
     lemmy_db_schema::{newtypes::CommunityId, ListingType, SortType},
@@ -38,6 +40,12 @@ pub struct FederatedInstance {
     pub blocked: Vec<Instance>,
 }
 
+impl Display for Instance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.domain)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Instance {
     pub id: u64,
@@ -60,7 +68,7 @@ pub struct FederationState {
 }
 
 impl Instances {
-    pub async fn new() -> Result<Instances> {
+    pub fn new() -> Result<Instances> {
         let domain = "lemmy.ml";
         let url = format!(
             "https://{}{}{}/federated_instances",
@@ -69,23 +77,11 @@ impl Instances {
         let mut headers = HeaderMap::new();
         headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
         headers.insert(USER_AGENT, HeaderValue::from_static(LEMNUX_UA));
-        let client = ClientBuilder::new().default_headers(headers).build()?;
+        let client = reqwest::blocking::ClientBuilder::new()
+            .default_headers(headers)
+            .build()?;
 
-        Ok(client.get(url).send().await?.json().await?)
-    }
-
-    pub async fn mine(id: u64) -> Option<Instance> {
-        let data = Self::new().await;
-
-        if let Ok(data) = data {
-            return data
-                .federated_instances
-                .linked
-                .into_iter()
-                .find(|item| item.id == id);
-        }
-
-        None
+        Ok(client.get(url).send().unwrap().json().unwrap())
     }
 }
 
@@ -98,10 +94,17 @@ impl API {
         headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
         headers.insert(USER_AGENT, HeaderValue::from_static(LEMNUX_UA));
 
-        let client = if user_setting.jwt.is_some() {
+        let client = if user_setting.user.is_some() {
             let bearer_token = format!(
                 "Bearer {}",
-                user_setting.jwt.unwrap().token.unwrap().to_string()
+                user_setting
+                    .user
+                    .unwrap()
+                    .jwt
+                    .unwrap()
+                    .token
+                    .unwrap()
+                    .to_string()
             );
             headers.insert(AUTHORIZATION, HeaderValue::from_str(&bearer_token).unwrap());
             ClientBuilder::new()

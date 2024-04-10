@@ -2,7 +2,6 @@ use gui::Lemnux;
 use iced::{Application, Settings};
 
 pub mod api;
-pub mod app;
 pub mod gui;
 pub mod settings;
 

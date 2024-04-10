@@ -7,22 +7,22 @@
 use std::fs;
 
 use iced::{
-    widget::{button, column, scrollable, text, text_input, Container, Space},
+    widget::{button, column, combo_box, combo_box::State, text, text_input, Container},
     Command, Element, Length,
 };
 
 use crate::{
     api::{login, Instance, Instances},
-    app::user::User,
-    settings::JWT,
+    settings::{AppTheme, Preferences, User, JWT},
 };
 
 #[derive(Debug, Clone)]
 pub struct Settings {
-    user_domain: String,
     instance: Option<Instance>,
-    instances: Option<Vec<Instance>>,
-    search_results: Option<Vec<Instance>>,
+    instances_to_search: State<Instance>,
+    user_selected_instance: Instance,
+    app_theme_chooser: State<AppTheme>,
+    user_theme: AppTheme,
     username_field: String,
     password_field: String,
     user: Option<User>,
@@ -32,8 +32,8 @@ pub struct Settings {
 pub enum Message {
     NotFound,
     SetInstance(Instance),
-    Instances(Instances),
-    DomainName(String),
+    UserSelectedInstance(Instance),
+    SetTheme(AppTheme),
     Username(String),
     Password(String),
     Login,
@@ -49,11 +49,26 @@ impl Settings {
             None
         };
 
+        let fetched_instances = Instances::new().unwrap();
+        let instances_to_search = State::new(fetched_instances.federated_instances.linked.clone());
+        let first_instance = fetched_instances.federated_instances.linked[0].clone();
+
+        let themes = AppTheme::to_vec();
+        let app_theme_chooser = State::new(themes.clone());
+        let user_theme = if let Ok(config) =
+            confy::load::<crate::settings::Preferences>("lemnux", "preferences")
+        {
+            config.theme
+        } else {
+            themes[0].clone()
+        };
+
         Self {
-            user_domain: String::new(),
             instance: None,
-            instances: None,
-            search_results: None,
+            instances_to_search,
+            user_selected_instance: first_instance,
+            app_theme_chooser,
+            user_theme,
             username_field: String::new(),
             password_field: String::new(),
             user,
@@ -63,23 +78,6 @@ impl Settings {
     pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::NotFound => Command::none(),
-            Message::Instances(inst) => {
-                self.instances = Some(inst.federated_instances.linked);
-
-                if self.instance.is_some() {
-                    let instance = self.instance.as_ref().unwrap();
-
-                    let settings = crate::settings::Settings {
-                        user: None,
-                        jwt: None,
-                        instance: Some(instance.clone()),
-                    };
-
-                    confy::store("lemnux", "instance", settings).unwrap();
-                }
-
-                Command::none()
-            }
             Message::SetInstance(inst) => {
                 self.instance = Some(inst);
 
@@ -87,9 +85,8 @@ impl Settings {
                     let instance = self.instance.as_ref().unwrap();
 
                     let settings = crate::settings::Settings {
-                        user: None,
-                        jwt: None,
                         instance: Some(instance.clone()),
+                        ..Default::default()
                     };
 
                     confy::store("lemnux", "instance", settings).unwrap();
@@ -97,31 +94,15 @@ impl Settings {
 
                 Command::none()
             }
-            Message::DomainName(domain_name) => {
-                self.user_domain = domain_name;
+            Message::UserSelectedInstance(inst) => {
+                self.user_selected_instance = inst;
 
-                if self.user_domain.len() == 3 && self.instances.is_none() {
-                    return Command::perform(Instances::new(), |result| match result {
-                        Ok(res) => Message::Instances(res),
-                        Err(_) => Message::NotFound,
-                    });
-                }
-
-                if self.user_domain.len() >= 3 && self.instances.is_some() {
-                    let mut domains: Vec<Instance> = Vec::new();
-
-                    self.instances
-                        .clone()
-                        .unwrap()
-                        .into_iter()
-                        .for_each(|item| {
-                            if item.domain.contains(&self.user_domain) {
-                                domains.push(item)
-                            }
-                        });
-
-                    self.search_results = Some(domains);
-                };
+                Command::none()
+            }
+            Message::SetTheme(theme) => {
+                self.user_theme = theme.clone();
+                let prefs = Preferences { theme };
+                confy::store("lemnux", "preferences", prefs).unwrap();
 
                 Command::none()
             }
@@ -149,9 +130,8 @@ impl Settings {
             }
             Message::Logged(jwt) => {
                 let settings = crate::settings::Settings {
-                    user: Some(User::new(self.username_field.clone().into(), true)),
-                    jwt,
-                    instance: None,
+                    user: Some(User::new(self.username_field.clone().into(), jwt, true)),
+                    ..Default::default()
                 };
 
                 confy::store("lemnux", "user", settings).unwrap();
@@ -176,27 +156,24 @@ impl Settings {
     }
 
     pub fn view(&self) -> Element<Message> {
-        let search = text_input("Search for instance domain", &self.user_domain)
-            .on_input(Message::DomainName);
+        let mut content = column!();
 
-        let mut list = column!().padding(10.);
+        content = content.push(combo_box(
+            &self.app_theme_chooser,
+            "Select app theme",
+            Some(&self.user_theme),
+            Message::SetTheme,
+        ));
 
-        if self.search_results.is_some() {
-            for instance in self.search_results.clone().unwrap() {
-                let item = button(text(instance.domain.to_string()))
-                    .on_press(Message::SetInstance(instance))
-                    .width(Length::Fill);
-                list = list.push(item);
-            }
-        }
-
-        let scrollable_list = scrollable(list)
-            .width(Length::Fill)
-            .height(Length::Fixed(100.));
-
-        let spacer = Space::new(Length::Fixed(30.), Length::Fixed(30.));
-
-        let mut content = column!(search, scrollable_list, spacer);
+        content = content.push(
+            combo_box(
+                &self.instances_to_search,
+                "Select your instance you want to work with",
+                Some(&self.user_selected_instance),
+                Message::SetInstance,
+            )
+            .on_option_hovered(Message::UserSelectedInstance),
+        );
 
         if self.instance.is_some() || self.user.is_some() {
             let username_field =
