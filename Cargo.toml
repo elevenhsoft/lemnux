@@ -9,8 +9,19 @@ edition = "2021"
 anyhow = "1.0.81"
 confy = "0.6.1"
 iced = { version = "0.12.1", features = ["tokio"] }
+iced_aw = { version = "0.8.0", default-features = false, features = [
+	"icons",
+	"card",
+	"modal",
+	"tab_bar",
+	"tabs",
+] }
 lemmy_api_common = "0.19.3"
-reqwest = { version = "0.12.3", features = ["json", "native-tls-vendored", "blocking"] }
+reqwest = { version = "0.12.3", features = [
+	"json",
+	"native-tls-vendored",
+	"blocking",
+] }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_derive = "1.0.197"
 tokio = { version = "1.37.0", features = ["full"] }

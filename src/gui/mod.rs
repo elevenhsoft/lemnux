@@ -87,6 +87,10 @@ impl Application for Lemnux {
                     return Command::none();
                 };
 
+                if let settings::Message::SetTheme(theme) = &opt {
+                    self.theme = crate::settings::Settings::translate_app_theme(theme.to_owned());
+                };
+
                 settings_page.update(opt).map(Message::Settings)
             }
             Message::OpenSettings => Command::perform(Instances::new(), Message::FetchedInstances),
