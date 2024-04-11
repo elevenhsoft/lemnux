@@ -169,29 +169,7 @@ impl Settings {
         let preferences: crate::settings::Preferences =
             confy::load("lemnux", "preferences").unwrap();
 
-        match preferences.theme {
-            crate::settings::AppTheme::Light => Theme::Light,
-            crate::settings::AppTheme::Dark => Theme::Dark,
-            crate::settings::AppTheme::Dracula => Theme::Dracula,
-            crate::settings::AppTheme::Nord => Theme::Nord,
-            crate::settings::AppTheme::SolarizedLight => Theme::SolarizedLight,
-            crate::settings::AppTheme::SolarizedDark => Theme::SolarizedDark,
-            crate::settings::AppTheme::GruvboxLight => Theme::GruvboxLight,
-            crate::settings::AppTheme::GruvboxDark => Theme::GruvboxDark,
-            crate::settings::AppTheme::CatppuccinLatte => Theme::CatppuccinLatte,
-            crate::settings::AppTheme::CatppuccinFrappe => Theme::CatppuccinFrappe,
-            crate::settings::AppTheme::CatppuccinMacchiato => Theme::CatppuccinMacchiato,
-            crate::settings::AppTheme::CatppuccinMocha => Theme::CatppuccinMocha,
-            crate::settings::AppTheme::TokyoNight => Theme::TokyoNight,
-            crate::settings::AppTheme::TokyoNightStorm => Theme::TokyoNightStorm,
-            crate::settings::AppTheme::TokyoNightLight => Theme::TokyoNightLight,
-            crate::settings::AppTheme::KanagawaWave => Theme::KanagawaWave,
-            crate::settings::AppTheme::KanagawaDragon => Theme::KanagawaDragon,
-            crate::settings::AppTheme::KanagawaLotus => Theme::KanagawaLotus,
-            crate::settings::AppTheme::Moonfly => Theme::Moonfly,
-            crate::settings::AppTheme::Nightfly => Theme::Nightfly,
-            crate::settings::AppTheme::Oxocarbon => Theme::Oxocarbon,
-        }
+        Self::translate_app_theme(preferences.theme)
     }
 
     pub fn translate_app_theme(theme: AppTheme) -> Theme {

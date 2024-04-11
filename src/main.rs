@@ -1,4 +1,4 @@
-use gui::Lemnux;
+use gui::App;
 use iced::{Application, Settings};
 
 pub mod api;
@@ -6,5 +6,5 @@ pub mod gui;
 pub mod settings;
 
 pub fn main() -> iced::Result {
-    Lemnux::run(Settings::default())
+    App::run(Settings::default())
 }

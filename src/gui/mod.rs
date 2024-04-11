@@ -4,124 +4,162 @@ pub mod posts;
 pub mod settings;
 
 use iced::{
-    executor,
-    widget::{button, column, row, Container},
-    Application, Command, Element, Theme,
+    alignment, executor,
+    widget::{column, text, Container},
+    Application, Command, Element, Length, Theme,
 };
+use iced_aw::native::{TabBar, TabLabel};
 use lemmy_api_common::post::GetPostsResponse;
 
 use self::settings::Settings;
-use crate::api::{get_posts, Instances};
+use crate::api::{get_posts, Instance, Instances};
 
 #[derive(Debug, Clone)]
 pub enum Pages {
-    Init,
     Home(Box<posts::Posts>),
     Settings(Box<settings::Settings>),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TabId {
+    Home,
+    Settings,
+}
+
+#[derive(Debug, Clone)]
 pub struct Lemnux {
-    pub page: Pages,
+    page: Pages,
+    active_tab: TabId,
     theme: Theme,
     posts: Option<GetPostsResponse>,
+    instances: Vec<Instance>,
+}
+
+pub enum App {
+    Loading,
+    Loaded(Lemnux),
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    Loaded(Lemnux),
+    TabSelected(TabId),
     Home(posts::Message),
-    InitalizePosts(Option<GetPostsResponse>),
     Settings(settings::Message),
-    GotoHome,
-    OpenSettings,
-    FetchedInstances(Instances),
 }
 
-impl Application for Lemnux {
+async fn load() -> Lemnux {
+    let theme = crate::settings::Settings::load_theme();
+    let posts = get_posts(None).await;
+    let instances = Instances::new().await.federated_instances.linked;
+
+    Lemnux {
+        page: Pages::Home(Box::new(posts::Posts::new(posts.clone()))),
+        active_tab: TabId::Home,
+        theme,
+        posts,
+        instances,
+    }
+}
+
+impl Application for App {
     type Executor = executor::Default;
     type Flags = ();
     type Message = Message;
     type Theme = Theme;
 
-    fn new(_flags: ()) -> (Lemnux, Command<Self::Message>) {
-        let load_posts = Command::perform(get_posts(None), Message::InitalizePosts);
-        let theme = crate::settings::Settings::load_theme();
-
-        (
-            Lemnux {
-                page: Pages::Init,
-                theme,
-                posts: None,
-            },
-            load_posts,
-        )
+    fn new(_flags: ()) -> (Self, Command<Message>) {
+        (App::Loading, Command::perform(load(), Message::Loaded))
     }
 
     fn theme(&self) -> Self::Theme {
-        self.theme.clone()
+        if let App::Loaded(config) = &self {
+            config.theme.clone()
+        } else {
+            crate::settings::Settings::load_theme()
+        }
     }
 
     fn title(&self) -> String {
         String::from("Lemnux")
     }
 
-    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
-        match message {
-            Message::GotoHome => {
-                self.page = Pages::Home(Box::new(posts::Posts::new(self.posts.clone())));
+    fn update(&mut self, message: Message) -> Command<Message> {
+        match self {
+            App::Loading => {
+                if let Message::Loaded(init) = message {
+                    *self = App::Loaded(init)
+                }
                 Command::none()
             }
-            Message::Home(post_mess) => {
-                let Pages::Home(home_page) = &mut self.page else {
-                    return Command::none();
-                };
+            App::Loaded(config) => match message {
+                Message::TabSelected(tab) => {
+                    match &tab {
+                        TabId::Home => {
+                            config.page =
+                                Pages::Home(Box::new(posts::Posts::new(config.posts.clone())));
+                        }
+                        TabId::Settings => {
+                            config.page =
+                                Pages::Settings(Box::new(Settings::new(config.instances.clone())));
+                        }
+                    }
 
-                home_page.update(post_mess).map(Message::Home)
-            }
-            Message::InitalizePosts(posts) => {
-                self.posts = posts;
-                self.page = Pages::Home(Box::new(posts::Posts::new(self.posts.clone())));
-                Command::none()
-            }
-            Message::Settings(opt) => {
-                let Pages::Settings(settings_page) = &mut self.page else {
-                    return Command::none();
-                };
+                    config.active_tab = tab;
 
-                if let settings::Message::SetTheme(theme) = &opt {
-                    self.theme = crate::settings::Settings::translate_app_theme(theme.to_owned());
-                };
+                    Command::none()
+                }
+                Message::Home(post_mess) => {
+                    let Pages::Home(home_page) = &mut config.page else {
+                        return Command::none();
+                    };
 
-                settings_page.update(opt).map(Message::Settings)
-            }
-            Message::OpenSettings => Command::perform(Instances::new(), Message::FetchedInstances),
-            Message::FetchedInstances(inst) => {
-                self.page =
-                    Pages::Settings(Box::new(Settings::new(inst.federated_instances.linked)));
+                    home_page.update(post_mess).map(Message::Home)
+                }
+                Message::Settings(opt) => {
+                    let Pages::Settings(settings_page) = &mut config.page else {
+                        return Command::none();
+                    };
 
-                Command::none()
-            }
+                    if let settings::Message::SetTheme(theme) = &opt {
+                        config.theme =
+                            crate::settings::Settings::translate_app_theme(theme.to_owned());
+                    };
+
+                    settings_page.update(opt).map(Message::Settings)
+                }
+                _ => Command::none(),
+            },
         }
     }
 
     fn view(&self) -> Element<Self::Message> {
-        let home_btn = button("Lemnux")
-            .on_press(Message::GotoHome)
-            .width(92)
-            .height(92);
-        let sett_btn = button("Settings")
-            .on_press(Message::OpenSettings)
-            .width(92)
-            .height(92);
-        let topbar = row!(home_btn, sett_btn).spacing(8).height(100);
+        match self {
+            App::Loading => Container::new(
+                text("Loading...")
+                    .horizontal_alignment(alignment::Horizontal::Center)
+                    .size(50),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_y()
+            .center_x()
+            .into(),
+            App::Loaded(config) => {
+                let tab_bar = TabBar::new(Message::TabSelected)
+                    .push(TabId::Home, TabLabel::Text(String::from("Home")))
+                    .push(TabId::Settings, TabLabel::Text(String::from("Settings")))
+                    .set_active_tab(&config.active_tab);
 
-        let page = match &self.page {
-            Pages::Init => row!().into(),
-            Pages::Home(posts) => posts.view().map(Message::Home),
-            Pages::Settings(settings) => settings.view().map(Message::Settings),
-        };
+                let page = match &config.page {
+                    Pages::Home(posts) => posts.view().map(Message::Home),
+                    Pages::Settings(settings) => settings.view().map(Message::Settings),
+                };
 
-        let content = column!(topbar, page);
+                let content = column!(tab_bar, page);
 
-        Container::new(content).into()
+                Container::new(content).into()
+            }
+        }
     }
 }
