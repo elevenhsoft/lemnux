@@ -2,6 +2,7 @@
 
 use std::fmt::Display;
 
+use iced::advanced::image::Bytes;
 use lemmy_api_common::{
     lemmy_db_schema::{newtypes::CommunityId, ListingType, SortType},
     lemmy_db_views::structs::PaginationCursor,
@@ -15,7 +16,10 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::settings::{Settings, JWT, LEMNUX_UA};
+use crate::{
+    gui::posts::{convert_postsview_to_card, PostCard},
+    settings::{Settings, JWT, LEMNUX_UA},
+};
 
 const API_URL: &str = "/api";
 const API_VER: &str = "/v3";
@@ -143,6 +147,22 @@ impl API {
     }
 }
 
+pub async fn load_img_to_memory(url: &str) -> Bytes {
+    let api = API::new(true);
+
+    let response = api
+        .client
+        .get(url)
+        .send()
+        .await
+        .unwrap()
+        .bytes()
+        .await
+        .unwrap();
+
+    Bytes::new(response)
+}
+
 pub async fn login(
     username_or_email: Sensitive<String>,
     password: Sensitive<String>,
@@ -211,8 +231,8 @@ impl PostsList {
 pub async fn get_posts(
     type_: Option<ListingType>,
     page_cursor: Option<PaginationCursor>,
-) -> Option<GetPostsResponse> {
-    let post_config = PostsList::new(type_, page_cursor);
+) -> (Vec<PostCard>, Option<PaginationCursor>) {
+    let post_config = PostsList::new(type_, page_cursor.clone());
     let api = API::new(true);
 
     let url = format!("{}/post/list", api.url.clone());
@@ -228,5 +248,8 @@ pub async fn get_posts(
         .await
         .unwrap();
 
-    Some(response)
+    (
+        convert_postsview_to_card(Some(response)).await.0,
+        page_cursor,
+    )
 }

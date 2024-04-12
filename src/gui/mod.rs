@@ -9,9 +9,9 @@ use iced::{
     Application, Command, Element, Length, Theme,
 };
 use iced_aw::native::{TabBar, TabLabel};
-use lemmy_api_common::{lemmy_db_schema::ListingType, post::GetPostsResponse};
+use lemmy_api_common::{lemmy_db_schema::ListingType, lemmy_db_views::structs::PaginationCursor};
 
-use self::settings::Settings;
+use self::{posts::PostCard, settings::Settings};
 use crate::api::{get_posts, Instance, Instances};
 
 #[derive(Debug)]
@@ -46,7 +46,7 @@ pub enum App {
 pub enum Message {
     Loaded(Lemnux),
     TabSelected(TabId),
-    PostFetched(Option<GetPostsResponse>),
+    PostFetched((Vec<PostCard>, Option<PaginationCursor>)),
     Posts(posts::Message),
     Settings(settings::Message),
 }
@@ -58,7 +58,11 @@ async fn load() -> Lemnux {
     let instances = Instances::new().await.federated_instances.linked;
 
     Lemnux {
-        page: Pages::Posts(posts::Posts::new(posts_type, posts.clone())),
+        page: Pages::Posts(posts::Posts::new(
+            posts_type,
+            Some(posts.0.clone()),
+            posts.1.clone(),
+        )),
         active_tab: TabId::All,
         theme,
         posts_type,
@@ -134,7 +138,11 @@ impl Application for App {
                     }
                 }
                 Message::PostFetched(posts) => {
-                    let object = posts::Posts::new(config.posts_type, posts);
+                    let object = posts::Posts::new(
+                        config.posts_type,
+                        Some(posts.0.clone()),
+                        posts.1.clone(),
+                    );
 
                     config.page = Pages::Posts(object);
 
