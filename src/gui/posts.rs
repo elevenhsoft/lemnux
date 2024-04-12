@@ -6,7 +6,9 @@ use iced::{
     },
     Command, Element, Length,
 };
-use lemmy_api_common::{lemmy_db_views::structs::PaginationCursor, post::GetPostsResponse};
+use lemmy_api_common::{
+    lemmy_db_schema::ListingType, lemmy_db_views::structs::PaginationCursor, post::GetPostsResponse,
+};
 
 use crate::api::get_posts;
 
@@ -14,6 +16,7 @@ use crate::api::get_posts;
 pub struct Posts {
     pub post_list: Option<GetPostsResponse>,
     pub pagination: Option<PaginationCursor>,
+    pub type_: Option<ListingType>,
 }
 
 #[derive(Debug, Clone)]
@@ -29,10 +32,11 @@ pub enum Message {
 }
 
 impl Posts {
-    pub fn new(post_list: Option<GetPostsResponse>) -> Self {
+    pub fn new(type_: Option<ListingType>, post_list: Option<GetPostsResponse>) -> Self {
         Self {
             post_list,
             pagination: None,
+            type_,
         }
     }
 
@@ -42,7 +46,7 @@ impl Posts {
                 PostFetching::NextPage(page_cursor) => {
                     self.pagination = page_cursor;
 
-                    Command::perform(get_posts(self.pagination.to_owned()), |ret| {
+                    Command::perform(get_posts(self.type_, self.pagination.to_owned()), |ret| {
                         Message::PostStatus(PostFetching::Loaded(ret))
                     })
                 }
@@ -60,30 +64,28 @@ impl Posts {
         let mut row = row!().spacing(4);
         let mut col = column!().spacing(4);
 
-        if self.post_list.is_some() {
-            let posts = self.post_list.clone().unwrap().posts;
-            let next_page = self.post_list.clone().unwrap().next_page;
+        let posts = self.post_list.clone().unwrap().posts;
+        let next_page = self.post_list.clone().unwrap().next_page;
 
-            for post in posts.into_iter() {
-                let name = button(text(post.post.name));
-                let body = if let Some(body) = post.post.body {
-                    text(body)
-                } else {
-                    text(String::new())
-                };
+        for post in posts.into_iter() {
+            let name = button(text(post.post.name));
+            let body = if let Some(body) = post.post.body {
+                text(body)
+            } else {
+                text(String::new())
+            };
 
-                let ruler = Rule::horizontal(2);
-                let post_card = column!(name, body, ruler).spacing(10);
+            let ruler = Rule::horizontal(2);
+            let post_card = column!(name, body, ruler).spacing(10);
 
-                col = col.push(post_card);
-            }
+            col = col.push(post_card);
+        }
 
-            let next_page_btn = button("Next Page")
-                .on_press(Message::PostStatus(PostFetching::NextPage(next_page)))
-                .width(Length::Fill);
+        let next_page_btn = button("Next Page")
+            .on_press(Message::PostStatus(PostFetching::NextPage(next_page)))
+            .width(Length::Fill);
 
-            col = col.push(next_page_btn);
-        };
+        col = col.push(next_page_btn);
 
         row = row.push(col);
 

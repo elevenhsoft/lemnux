@@ -192,9 +192,9 @@ pub struct PostsList {
 }
 
 impl PostsList {
-    pub fn new(page_cursor: Option<PaginationCursor>) -> Self {
+    pub fn new(type_: Option<ListingType>, page_cursor: Option<PaginationCursor>) -> Self {
         Self {
-            type_: Some(ListingType::Local),
+            type_,
             sort: Some(SortType::Hot),
             page: None,
             limit: Some(20),
@@ -208,8 +208,11 @@ impl PostsList {
     }
 }
 
-pub async fn get_posts(page_cursor: Option<PaginationCursor>) -> Option<GetPostsResponse> {
-    let post_config = PostsList::new(page_cursor);
+pub async fn get_posts(
+    type_: Option<ListingType>,
+    page_cursor: Option<PaginationCursor>,
+) -> Option<GetPostsResponse> {
+    let post_config = PostsList::new(type_, page_cursor);
     let api = API::new(true);
 
     let url = format!("{}/post/list", api.url.clone());

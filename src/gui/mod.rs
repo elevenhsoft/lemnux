@@ -9,20 +9,22 @@ use iced::{
     Application, Command, Element, Length, Theme,
 };
 use iced_aw::native::{TabBar, TabLabel};
-use lemmy_api_common::post::GetPostsResponse;
+use lemmy_api_common::{lemmy_db_schema::ListingType, post::GetPostsResponse};
 
 use self::settings::Settings;
 use crate::api::{get_posts, Instance, Instances};
 
 #[derive(Debug, Clone)]
 pub enum Pages {
-    Home(Box<posts::Posts>),
-    Settings(Box<settings::Settings>),
+    Posts(posts::Posts),
+    Settings(settings::Settings),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TabId {
-    Home,
+    All,
+    Local,
+    Subscribed,
     Settings,
 }
 
@@ -31,7 +33,7 @@ pub struct Lemnux {
     page: Pages,
     active_tab: TabId,
     theme: Theme,
-    posts: Option<GetPostsResponse>,
+    posts_type: Option<ListingType>,
     instances: Vec<Instance>,
 }
 
@@ -44,20 +46,22 @@ pub enum App {
 pub enum Message {
     Loaded(Lemnux),
     TabSelected(TabId),
-    Home(posts::Message),
+    PostFetched(Option<GetPostsResponse>),
+    Posts(posts::Message),
     Settings(settings::Message),
 }
 
 async fn load() -> Lemnux {
     let theme = crate::settings::Settings::load_theme();
-    let posts = get_posts(None).await;
+    let posts_type = Some(ListingType::All);
+    let posts = get_posts(Some(ListingType::All), None).await;
     let instances = Instances::new().await.federated_instances.linked;
 
     Lemnux {
-        page: Pages::Home(Box::new(posts::Posts::new(posts.clone()))),
-        active_tab: TabId::Home,
+        page: Pages::Posts(posts::Posts::new(posts_type, posts.clone())),
+        active_tab: TabId::All,
         theme,
-        posts,
+        posts_type,
         instances,
     }
 }
@@ -94,27 +98,54 @@ impl Application for App {
             }
             App::Loaded(config) => match message {
                 Message::TabSelected(tab) => {
-                    match &tab {
-                        TabId::Home => {
-                            config.page =
-                                Pages::Home(Box::new(posts::Posts::new(config.posts.clone())));
+                    config.active_tab = tab.clone();
+
+                    match tab {
+                        TabId::All => {
+                            config.posts_type = Some(ListingType::All);
+
+                            Command::perform(
+                                get_posts(config.posts_type, None),
+                                Message::PostFetched,
+                            )
+                        }
+                        TabId::Local => {
+                            config.posts_type = Some(ListingType::Local);
+
+                            Command::perform(
+                                get_posts(config.posts_type, None),
+                                Message::PostFetched,
+                            )
+                        }
+                        TabId::Subscribed => {
+                            config.posts_type = Some(ListingType::Subscribed);
+
+                            Command::perform(
+                                get_posts(config.posts_type, None),
+                                Message::PostFetched,
+                            )
                         }
                         TabId::Settings => {
                             config.page =
-                                Pages::Settings(Box::new(Settings::new(config.instances.clone())));
+                                Pages::Settings(Settings::new(config.instances.to_owned()));
+
+                            Command::none()
                         }
                     }
+                }
+                Message::PostFetched(posts) => {
+                    let object = posts::Posts::new(config.posts_type, posts);
 
-                    config.active_tab = tab;
+                    config.page = Pages::Posts(object);
 
                     Command::none()
                 }
-                Message::Home(post_mess) => {
-                    let Pages::Home(home_page) = &mut config.page else {
+                Message::Posts(post_mess) => {
+                    let Pages::Posts(home_page) = &mut config.page else {
                         return Command::none();
                     };
 
-                    home_page.update(post_mess).map(Message::Home)
+                    home_page.update(post_mess).map(Message::Posts)
                 }
                 Message::Settings(opt) => {
                     let Pages::Settings(settings_page) = &mut config.page else {
@@ -147,12 +178,17 @@ impl Application for App {
             .into(),
             App::Loaded(config) => {
                 let tab_bar = TabBar::new(Message::TabSelected)
-                    .push(TabId::Home, TabLabel::Text(String::from("Home")))
+                    .push(TabId::All, TabLabel::Text(String::from("All")))
+                    .push(TabId::Local, TabLabel::Text(String::from("Local")))
+                    .push(
+                        TabId::Subscribed,
+                        TabLabel::Text(String::from("Subscribed")),
+                    )
                     .push(TabId::Settings, TabLabel::Text(String::from("Settings")))
                     .set_active_tab(&config.active_tab);
 
                 let page = match &config.page {
-                    Pages::Home(posts) => posts.view().map(Message::Home),
+                    Pages::Posts(posts) => posts.view().map(Message::Posts),
                     Pages::Settings(settings) => settings.view().map(Message::Settings),
                 };
 
