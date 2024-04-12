@@ -14,7 +14,7 @@ use lemmy_api_common::{lemmy_db_schema::ListingType, post::GetPostsResponse};
 use self::settings::Settings;
 use crate::api::{get_posts, Instance, Instances};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Pages {
     Posts(posts::Posts),
     Settings(settings::Settings),
@@ -28,7 +28,7 @@ pub enum TabId {
     Settings,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Lemnux {
     page: Pages,
     active_tab: TabId,
@@ -42,7 +42,7 @@ pub enum App {
     Loaded(Lemnux),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Message {
     Loaded(Lemnux),
     TabSelected(TabId),
