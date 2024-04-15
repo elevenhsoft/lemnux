@@ -9,9 +9,14 @@ use iced::{
     Application, Command, Element, Length, Theme,
 };
 use iced_aw::native::{TabBar, TabLabel};
-use lemmy_api_common::{lemmy_db_schema::ListingType, lemmy_db_views::structs::PaginationCursor};
+use lemmy_api_common::{
+    lemmy_db_schema::ListingType, lemmy_db_views::structs::PaginationCursor, post::GetPostsResponse,
+};
 
-use self::{posts::PostCard, settings::Settings};
+use self::{
+    posts::{convert_postsview_to_card, PostCard},
+    settings::Settings,
+};
 use crate::api::{get_posts, Instance, Instances};
 
 #[derive(Debug)]
@@ -35,6 +40,8 @@ pub struct Lemnux {
     theme: Theme,
     posts_type: Option<ListingType>,
     instances: Vec<Instance>,
+    posts: Vec<PostCard>,
+    next_page: Option<PaginationCursor>,
 }
 
 pub enum App {
@@ -46,7 +53,9 @@ pub enum App {
 pub enum Message {
     Loaded(Lemnux),
     TabSelected(TabId),
-    PostFetched((Vec<PostCard>, Option<PaginationCursor>)),
+    PostFetched(GetPostsResponse),
+    PostRendered(PostCard),
+    RenderPosts,
     Posts(posts::Message),
     Settings(settings::Message),
 }
@@ -57,16 +66,24 @@ async fn load() -> Lemnux {
     let posts = get_posts(Some(ListingType::All), None).await;
     let instances = Instances::new().await.federated_instances.linked;
 
+    let mut post_cards = Vec::new();
+
+    for item in posts.posts.iter() {
+        post_cards.push(convert_postsview_to_card(item.to_owned()).await)
+    }
+
     Lemnux {
         page: Pages::Posts(posts::Posts::new(
             posts_type,
-            Some(posts.0.clone()),
-            posts.1.clone(),
+            post_cards.clone(),
+            posts.next_page.clone(),
         )),
         active_tab: TabId::All,
         theme,
         posts_type,
         instances,
+        posts: post_cards,
+        next_page: posts.next_page,
     }
 }
 
@@ -138,10 +155,27 @@ impl Application for App {
                     }
                 }
                 Message::PostFetched(posts) => {
+                    config.next_page = posts.next_page;
+
+                    let cmds = posts.posts.into_iter().map(|item| {
+                        Command::perform(convert_postsview_to_card(item), Message::PostRendered)
+                    });
+
+                    config.posts.clear();
+
+                    Command::batch(cmds)
+                }
+                Message::PostRendered(card) => {
+                    config.posts.push(card);
+
+                    Command::none()
+                    // Command::perform(async {}, |()| Message::RenderPosts)
+                }
+                Message::RenderPosts => {
                     let object = posts::Posts::new(
                         config.posts_type,
-                        Some(posts.0.clone()),
-                        posts.1.clone(),
+                        config.posts.to_owned(),
+                        config.next_page.to_owned(),
                     );
 
                     config.page = Pages::Posts(object);

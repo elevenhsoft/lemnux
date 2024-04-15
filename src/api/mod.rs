@@ -16,10 +16,7 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    gui::posts::{convert_postsview_to_card, PostCard},
-    settings::{Settings, JWT, LEMNUX_UA},
-};
+use crate::settings::{Settings, JWT, LEMNUX_UA};
 
 const API_URL: &str = "/api";
 const API_VER: &str = "/v3";
@@ -231,14 +228,13 @@ impl PostsList {
 pub async fn get_posts(
     type_: Option<ListingType>,
     page_cursor: Option<PaginationCursor>,
-) -> (Vec<PostCard>, Option<PaginationCursor>) {
+) -> GetPostsResponse {
     let post_config = PostsList::new(type_, page_cursor.clone());
     let api = API::new(true);
 
     let url = format!("{}/post/list", api.url.clone());
 
-    let response = api
-        .client
+    api.client
         .get(url)
         .query(&post_config)
         .send()
@@ -246,10 +242,5 @@ pub async fn get_posts(
         .unwrap()
         .json::<GetPostsResponse>()
         .await
-        .unwrap();
-
-    (
-        convert_postsview_to_card(Some(response)).await.0,
-        page_cursor,
-    )
+        .unwrap()
 }
