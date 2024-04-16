@@ -116,28 +116,42 @@ impl Application for App {
                 )
             }
             App::Loaded(config) => match message {
-                Message::TabSelected(tab) => match tab {
-                    TabId::All => {
-                        config.posts_type = Some(ListingType::All);
+                Message::TabSelected(tab) => {
+                    config.active_tab = tab.clone();
 
-                        Command::perform(get_posts(config.posts_type, None), Message::PostFetched)
-                    }
-                    TabId::Local => {
-                        config.posts_type = Some(ListingType::Local);
+                    match tab {
+                        TabId::All => {
+                            config.posts_type = Some(ListingType::All);
 
-                        Command::perform(get_posts(config.posts_type, None), Message::PostFetched)
-                    }
-                    TabId::Subscribed => {
-                        config.posts_type = Some(ListingType::Subscribed);
+                            Command::perform(
+                                get_posts(config.posts_type, None),
+                                Message::PostFetched,
+                            )
+                        }
+                        TabId::Local => {
+                            config.posts_type = Some(ListingType::Local);
 
-                        Command::perform(get_posts(config.posts_type, None), Message::PostFetched)
-                    }
-                    TabId::Settings => {
-                        config.page = Pages::Settings(Settings::new(config.instances.to_owned()));
+                            Command::perform(
+                                get_posts(config.posts_type, None),
+                                Message::PostFetched,
+                            )
+                        }
+                        TabId::Subscribed => {
+                            config.posts_type = Some(ListingType::Subscribed);
 
-                        Command::none()
+                            Command::perform(
+                                get_posts(config.posts_type, None),
+                                Message::PostFetched,
+                            )
+                        }
+                        TabId::Settings => {
+                            config.page =
+                                Pages::Settings(Settings::new(config.instances.to_owned()));
+
+                            Command::none()
+                        }
                     }
-                },
+                }
                 Message::PostFetched(posts) => {
                     config.next_page = posts.next_page;
 
