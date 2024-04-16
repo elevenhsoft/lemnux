@@ -40,7 +40,7 @@ pub struct Lemnux {
     theme: Theme,
     posts_type: Option<ListingType>,
     instances: Vec<Instance>,
-    posts: Vec<PostCard>,
+    post_cards: Vec<PostCard>,
     next_page: Option<PaginationCursor>,
 }
 
@@ -63,14 +63,9 @@ pub enum Message {
 async fn load() -> Lemnux {
     let theme = crate::settings::Settings::load_theme();
     let posts_type = Some(ListingType::All);
-    let posts = get_posts(Some(ListingType::All), None).await;
+    let posts = get_posts(posts_type, None).await;
     let instances = Instances::new().await.federated_instances.linked;
-
-    let mut post_cards = Vec::new();
-
-    for item in posts.posts.iter() {
-        post_cards.push(convert_postsview_to_card(item.to_owned()).await)
-    }
+    let post_cards = Vec::new();
 
     Lemnux {
         page: Pages::Posts(posts::Posts::new(
@@ -82,7 +77,7 @@ async fn load() -> Lemnux {
         theme,
         posts_type,
         instances,
-        posts: post_cards,
+        post_cards,
         next_page: posts.next_page,
     }
 }
@@ -115,45 +110,34 @@ impl Application for App {
                 if let Message::Loaded(init) = message {
                     *self = App::Loaded(init)
                 }
-                Command::none()
+                Command::perform(
+                    get_posts(Some(ListingType::All), None),
+                    Message::PostFetched,
+                )
             }
             App::Loaded(config) => match message {
-                Message::TabSelected(tab) => {
-                    config.active_tab = tab.clone();
+                Message::TabSelected(tab) => match tab {
+                    TabId::All => {
+                        config.posts_type = Some(ListingType::All);
 
-                    match tab {
-                        TabId::All => {
-                            config.posts_type = Some(ListingType::All);
-
-                            Command::perform(
-                                get_posts(config.posts_type, None),
-                                Message::PostFetched,
-                            )
-                        }
-                        TabId::Local => {
-                            config.posts_type = Some(ListingType::Local);
-
-                            Command::perform(
-                                get_posts(config.posts_type, None),
-                                Message::PostFetched,
-                            )
-                        }
-                        TabId::Subscribed => {
-                            config.posts_type = Some(ListingType::Subscribed);
-
-                            Command::perform(
-                                get_posts(config.posts_type, None),
-                                Message::PostFetched,
-                            )
-                        }
-                        TabId::Settings => {
-                            config.page =
-                                Pages::Settings(Settings::new(config.instances.to_owned()));
-
-                            Command::none()
-                        }
+                        Command::perform(get_posts(config.posts_type, None), Message::PostFetched)
                     }
-                }
+                    TabId::Local => {
+                        config.posts_type = Some(ListingType::Local);
+
+                        Command::perform(get_posts(config.posts_type, None), Message::PostFetched)
+                    }
+                    TabId::Subscribed => {
+                        config.posts_type = Some(ListingType::Subscribed);
+
+                        Command::perform(get_posts(config.posts_type, None), Message::PostFetched)
+                    }
+                    TabId::Settings => {
+                        config.page = Pages::Settings(Settings::new(config.instances.to_owned()));
+
+                        Command::none()
+                    }
+                },
                 Message::PostFetched(posts) => {
                     config.next_page = posts.next_page;
 
@@ -161,20 +145,16 @@ impl Application for App {
                         Command::perform(convert_postsview_to_card(item), Message::PostRendered)
                     });
 
-                    config.posts.clear();
+                    config.post_cards.clear();
 
                     Command::batch(cmds)
                 }
                 Message::PostRendered(card) => {
-                    config.posts.push(card);
+                    config.post_cards.push(card);
 
-                    Command::none()
-                    // Command::perform(async {}, |()| Message::RenderPosts)
-                }
-                Message::RenderPosts => {
                     let object = posts::Posts::new(
                         config.posts_type,
-                        config.posts.to_owned(),
+                        config.post_cards.to_owned(),
                         config.next_page.to_owned(),
                     );
 
