@@ -9,6 +9,7 @@ overflow-checks = false
 
 [dependencies]
 anyhow = "1.0.81"
+chrono = "0.4.38"
 confy = "0.6.1"
 iced = { version = "0.12.1", features = ["tokio", "advanced", "image"] }
 iced_aw = { version = "0.8.0", default-features = false, features = [
@@ -17,6 +18,7 @@ iced_aw = { version = "0.8.0", default-features = false, features = [
 	"modal",
 	"tab_bar",
 	"tabs",
+	"badge",
 ] }
 lemmy_api_common = "0.19.3"
 reqwest = { version = "0.12.3", features = [

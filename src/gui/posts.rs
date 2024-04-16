@@ -1,13 +1,14 @@
 use iced::{
     advanced::image::Handle,
+    theme,
     widget::{
-        button, column, row,
+        button, column, horizontal_rule, row,
         scrollable::{scroll_to, AbsoluteOffset, Id, Scrollable},
         text, Container, Image,
     },
     Command, Element, Length,
 };
-use iced_aw::Card;
+use iced_aw::{badge, BadgeStyles, Card};
 use lemmy_api_common::{
     lemmy_db_schema::ListingType,
     lemmy_db_views::structs::{PaginationCursor, PostView},
@@ -34,15 +35,17 @@ pub enum PostFetching {
 #[derive(Debug, Clone)]
 pub enum Message {
     PostStatus(PostFetching),
+    OpenPost(String),
 }
 
 #[derive(Debug, Clone)]
 pub struct PostCard {
-    _url: String,
+    url: String,
     name: String,
     creator: String,
     body: String,
     thumbnail: Option<Handle>,
+    updated: String,
 }
 
 pub async fn convert_postsview_to_card(item: PostView) -> PostCard {
@@ -51,7 +54,7 @@ pub async fn convert_postsview_to_card(item: PostView) -> PostCard {
     } else {
         String::new()
     };
-    let author = format!("@{}", item.creator.name);
+    let author = format!("{}@{}", item.creator.name, item.community.title);
     let body = if let Some(text) = item.post.body {
         text
     } else {
@@ -64,13 +67,19 @@ pub async fn convert_postsview_to_card(item: PostView) -> PostCard {
     } else {
         None
     };
+    let updated = if let Some(updated) = item.post.updated {
+        updated.to_rfc2822()
+    } else {
+        item.post.published.to_rfc2822()
+    };
 
     PostCard {
-        _url: url,
+        url,
         name: item.post.name,
         creator: author,
         body,
         thumbnail,
+        updated,
     }
 }
 
@@ -118,6 +127,11 @@ impl Posts {
                 }
                 PostFetching::Idle => Command::none(),
             },
+            Message::OpenPost(link) => {
+                println!("{}", link);
+
+                Command::none()
+            }
         }
     }
 
@@ -125,13 +139,31 @@ impl Posts {
         let mut col = column!().spacing(60).padding(30);
 
         for post in &self.post_cards {
-            let title_row = row!(button(text(&post.creator)), text(&post.name))
-                .spacing(20)
-                .align_items(iced::Alignment::Center);
+            let title_row = column!(
+                button(text(&post.name))
+                    .style(theme::Button::Secondary)
+                    .width(Length::Fill)
+                    .on_press(Message::OpenPost(post.url.clone())),
+                horizontal_rule(1),
+                row!(
+                    badge(text(&post.creator)).style(BadgeStyles::Primary),
+                    badge(text(&post.updated)).style(BadgeStyles::Info)
+                )
+                .spacing(10)
+            )
+            .spacing(15);
+
             let body_row = if post.thumbnail.is_some() {
-                row!(Image::new(post.thumbnail.clone().unwrap()))
+                Container::new(Image::new(post.thumbnail.clone().unwrap()))
+                    .width(Length::Fill)
+                    .center_x()
+                    .center_y()
             } else {
-                row!(text(&post.body)).spacing(30).padding(30)
+                Container::new(text(&post.body))
+                    .width(Length::Fill)
+                    .center_x()
+                    .center_y()
+                    .padding(30)
             };
 
             col = col.push(Card::new(title_row, body_row));
